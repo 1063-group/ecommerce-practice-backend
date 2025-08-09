@@ -4,7 +4,7 @@ const morgan = require("morgan");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { dbConnection } = require("./config/db");
-
+const userRouter = require("./routes/user.routes");
 // config
 dotenv.config();
 
@@ -21,6 +21,7 @@ app.use(express.json());
 
 // routes
 // app.use(require("./routes/index"));
+app.use("/api/v1/auth", userRouter);
 
 // starting the server
 app.listen(process.env.PORT, () => {
