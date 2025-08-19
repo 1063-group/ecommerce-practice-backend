@@ -7,11 +7,13 @@ const userSchema = new mongoose.Schema({
   // Email/Phone login uchun
   phone: {
     type: String,
-    sparse: true, // Telegram user'larda phone bo'lmasligi mumkin
+    sparse: true, // Bu yerda sparse true, lekin empty string problem qiladi
+    default: undefined, // null o'rniga undefined ishlatamiz
   },
   email: {
     type: String,
     sparse: true,
+    default: undefined,
   },
   password: {
     type: String,
@@ -28,6 +30,7 @@ const userSchema = new mongoose.Schema({
   username: {
     type: String,
     sparse: true,
+    default: undefined,
   },
   photoUrl: {
     type: String,
@@ -64,7 +67,7 @@ const userSchema = new mongoose.Schema({
     default: Date.now,
   },
 }, {
-  timestamps: true // createdAt va updatedAt avtomatik qo'shiladi
+  timestamps: true
 });
 
 // Index'lar yaratish performance uchun
@@ -72,5 +75,14 @@ userSchema.index({ telegramId: 1 }, { sparse: true });
 userSchema.index({ email: 1 }, { sparse: true });
 userSchema.index({ phone: 1 }, { sparse: true });
 userSchema.index({ username: 1 }, { sparse: true });
+
+// Pre-save middleware - empty string'larni undefined ga o'zgartirish
+userSchema.pre('save', function(next) {
+  // Empty string'larni undefined ga o'zgartiramiz
+  if (this.phone === '') this.phone = undefined;
+  if (this.email === '') this.email = undefined;
+  if (this.username === '') this.username = undefined;
+  next();
+});
 
 module.exports = mongoose.model("Users", userSchema);

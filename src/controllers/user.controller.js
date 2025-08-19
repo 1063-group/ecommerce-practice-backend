@@ -104,20 +104,6 @@ const telegramLogin = async (req, res) => {
       return res.status(500).json({ message: "Server configuration error" });
     }
 
-    // Telegram data validation (optional - production'da yoqing)
-    const dataCheckString = Object.keys(userData)
-      .sort()
-      .map(key => `${key}=${userData[key]}`)
-      .join('\n');
-    
-    const secretKey = crypto.createHash('sha256').update(botToken).digest();
-    const computedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-    
-    // Hash verificatsiya (development'da comment qilingan)
-    // if (computedHash !== hash) {
-    //   return res.status(400).json({ message: 'Invalid Telegram data' });
-    // }
-    
     // User'ni database'da qidirish yoki yaratish
     let user = await userSchema.findOne({ 
       telegramId: userData.id.toString()
@@ -126,21 +112,34 @@ const telegramLogin = async (req, res) => {
     if (!user) {
       // Yangi user yaratish
       try {
-        user = await userSchema.create({
+        // Empty string'lar o'rniga undefined yoki null ishlatamiz
+        const newUserData = {
           telegramId: userData.id.toString(),
           firstName: userData.first_name || 'User',
           lastName: userData.last_name || '',
-          username: userData.username || `user_${userData.id}`,
+          username: userData.username || undefined, // empty string o'rniga undefined
           photoUrl: userData.photo_url || '',
-          phone: '', // Telegram'dan phone kelmaydi
-          email: '', // Telegram'dan email kelmaydi
+          phone: undefined, // empty string o'rniga undefined
+          email: undefined, // empty string o'rniga undefined
           authMethod: 'telegram',
           isVerified: true // Telegram orqali kirganlar verified hisoblanadi
-        });
+        };
+
+        user = await userSchema.create(newUserData);
         
         console.log("New Telegram user created:", user._id);
       } catch (createError) {
         console.log("Error creating Telegram user:", createError);
+        
+        // Agar duplicate key error bo'lsa, boshqa field'da conflict bor
+        if (createError.code === 11000) {
+          const duplicateField = Object.keys(createError.keyValue)[0];
+          return res.status(400).json({ 
+            message: `User with this ${duplicateField} already exists`,
+            field: duplicateField
+          });
+        }
+        
         return res.status(500).json({ message: "Error creating user account" });
       }
     } else {
@@ -148,7 +147,11 @@ const telegramLogin = async (req, res) => {
       user.firstName = userData.first_name || user.firstName;
       user.lastName = userData.last_name || user.lastName;
       user.photoUrl = userData.photo_url || user.photoUrl;
-      user.username = userData.username || user.username;
+      
+      // Username faqat agar yangi qiymat bo'lsa update qilamiz
+      if (userData.username && userData.username !== user.username) {
+        user.username = userData.username;
+      }
       
       await user.save();
       console.log("Existing Telegram user updated:", user._id);
@@ -171,6 +174,16 @@ const telegramLogin = async (req, res) => {
     
   } catch (error) {
     console.log('Telegram login error:', error);
+    
+    // MongoDB duplicate key error
+    if (error.code === 11000) {
+      const duplicateField = Object.keys(error.keyValue)[0];
+      return res.status(400).json({ 
+        message: `User with this ${duplicateField} already exists`,
+        error: `Duplicate ${duplicateField}`
+      });
+    }
+    
     res.status(500).json({ message: 'Telegram login failed', error: error.message });
   }
 };
