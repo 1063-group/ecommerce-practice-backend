@@ -120,12 +120,12 @@ const telegramLogin = async (req, res) => {
           telegramId: userData.id.toString(),
           firstName: userData.first_name || 'User',
           lastName: userData.last_name || '',
-          username: userData.username || undefined, // empty string o'rniga undefined
-          photoUrl: userData.photo_url || '',
-          phone: undefined, // empty string o'rniga undefined
-          email: undefined, // empty string o'rniga undefined
+          username: userData.username || undefined,
+          photoUrl: userData.photo_url && userData.photo_url.trim() !== '' ? userData.photo_url : '', // URL mavjudligini tekshiramiz
+          phone: undefined,
+          email: undefined,
           authMethod: 'telegram',
-          isVerified: true // Telegram orqali kirganlar verified hisoblanadi
+          isVerified: true
         };
 
         user = await userSchema.create(newUserData);
