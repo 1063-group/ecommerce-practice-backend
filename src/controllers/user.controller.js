@@ -84,6 +84,9 @@ const login = async (req, res) => {
 
 // Telegram login function
 const telegramLogin = async (req, res) => {
+  // Set response headers
+  res.setHeader('Content-Type', 'application/json');
+  
   try {
     const { telegramData } = req.body;
     
@@ -91,7 +94,7 @@ const telegramLogin = async (req, res) => {
       return res.status(400).json({ message: "Telegram data is required" });
     }
 
-    console.log("Telegram login attempt:", telegramData);
+    console.log("✅ Telegram login attempt:", telegramData);
 
     // Telegram ma'lumotlarini verificatsiya qilish
     const { hash, ...userData } = telegramData;
@@ -158,7 +161,8 @@ const telegramLogin = async (req, res) => {
     }
     
     // Success response
-    res.status(200).json({
+    console.log("✅ Telegram login successful for user:", user._id);
+    return res.status(200).json({
       message: 'Telegram login successful',
       user: {
         id: user._id,
@@ -173,7 +177,7 @@ const telegramLogin = async (req, res) => {
     });
     
   } catch (error) {
-    console.log('Telegram login error:', error);
+    console.error('❌ Telegram login error:', error);
     
     // MongoDB duplicate key error
     if (error.code === 11000) {
@@ -184,7 +188,10 @@ const telegramLogin = async (req, res) => {
       });
     }
     
-    res.status(500).json({ message: 'Telegram login failed', error: error.message });
+    return res.status(500).json({ 
+      message: 'Telegram login failed', 
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 };
 

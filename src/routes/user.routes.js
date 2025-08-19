@@ -1,18 +1,18 @@
 const express = require("express");
-const userSchema = require("../models/user.model");
 const router = express.Router();
 
-// Controller file'dan import qiling (fayl nomi aniq bo'lishi kerak)
-// Agar fayl nomi user.module.js bo'lsa:
-// const { register, updatePassword, login, telegramLogin } = require("../controllers/user.module");
-
-// Agar fayl nomi user.controller.js bo'lsa:
+// Controller import
 const { register, updatePassword, login, telegramLogin } = require("../controllers/user.controller");
 
-// Routes
+// Routes - to'g'ri format
 router.post("/register", register);
 router.post("/login", login);
 router.post("/telegram-login", telegramLogin);
-router.patch("/update/password", updatePassword);
+router.patch("/update-password", updatePassword); // "/" o'rniga "-" ishlatdik
+
+// Test route
+router.get("/test", (req, res) => {
+  res.json({ message: "User routes working!" });
+});
 
 module.exports = router;
