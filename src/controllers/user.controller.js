@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const register = async (req, res) => {
   try {
     const { phone } = req.body;
-
+    
     const user = await userSchema.create({ phone });
     await user.save()
     res.status(200).json({ message: "User registered successfully" });
