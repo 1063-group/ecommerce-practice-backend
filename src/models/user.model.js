@@ -1,3 +1,4 @@
+// Updated user.model.js with verification fields
 const mongoose = require("mongoose");
 const uuid = require("uuid");
 
@@ -7,8 +8,8 @@ const userSchema = new mongoose.Schema({
   // Email/Phone login uchun
   phone: {
     type: String,
-    sparse: true, // Bu yerda sparse true, lekin empty string problem qiladi
-    default: undefined, // null o'rniga undefined ishlatamiz
+    sparse: true,
+    default: undefined,
   },
   email: {
     type: String,
@@ -19,6 +20,20 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: unique,
     minLength: 8,
+  },
+  
+  // Verification fields
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+  verificationCode: {
+    type: String,
+    default: undefined,
+  },
+  verificationCodeCreatedAt: {
+    type: Number,
+    default: undefined,
   },
   
   // Telegram login uchun
@@ -56,12 +71,6 @@ const userSchema = new mongoose.Schema({
     default: 'email',
   },
   
-  // Account status
-  isVerified: {
-    type: Boolean,
-    default: false,
-  },
-  
   createdAt: {
     type: Date,
     default: Date.now,
@@ -75,6 +84,7 @@ userSchema.index({ telegramId: 1 }, { sparse: true });
 userSchema.index({ email: 1 }, { sparse: true });
 userSchema.index({ phone: 1 }, { sparse: true });
 userSchema.index({ username: 1 }, { sparse: true });
+userSchema.index({ verificationCode: 1 }, { sparse: true });
 
 // Pre-save middleware - empty string'larni undefined ga o'zgartirish
 userSchema.pre('save', function(next) {
@@ -82,6 +92,7 @@ userSchema.pre('save', function(next) {
   if (this.phone === '') this.phone = undefined;
   if (this.email === '') this.email = undefined;
   if (this.username === '') this.username = undefined;
+  if (this.verificationCode === '') this.verificationCode = undefined;
   next();
 });
 

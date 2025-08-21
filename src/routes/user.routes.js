@@ -1,14 +1,28 @@
+// Updated user.routes.js
 const express = require("express");
 const router = express.Router();
 
 // Controller import
-const { register, updatePassword, login, telegramLogin } = require("../controllers/user.controller");
+const { 
+  register, 
+  verifyAccount, 
+  resendVerificationCode, 
+  updatePassword, 
+  login, 
+  telegramLogin 
+} = require("../controllers/user.controller");
 
-// Routes - to'g'ri format
+// Authentication routes
 router.post("/register", register);
 router.post("/login", login);
 router.post("/telegram-login", telegramLogin);
-router.patch("/update-password", updatePassword); // "/" o'rniga "-" ishlatdik
+
+// Verification routes
+router.post("/verify-account", verifyAccount);
+router.post("/resend-verification", resendVerificationCode);
+
+// Password management
+router.patch("/update-password", updatePassword);
 
 // Test route
 router.get("/test", (req, res) => {
