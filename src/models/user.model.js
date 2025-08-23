@@ -21,8 +21,6 @@ const userSchema = new mongoose.Schema({
     default: unique,
     minLength: 8,
   },
-  
-  // Verification fields
   isVerified: {
     type: Boolean,
     default: false,
@@ -35,8 +33,6 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: undefined,
   },
-  
-  // Telegram login uchun
   telegramId: {
     type: String,
     sparse: true,
@@ -51,8 +47,6 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
-  
-  // Umumiy ma'lumotlar
   firstName: {
     type: String,
     required: true,
@@ -63,8 +57,6 @@ const userSchema = new mongoose.Schema({
     default: unique,
     required: false,
   },
-  
-  // Auth method
   authMethod: {
     type: String,
     enum: ['email', 'phone', 'telegram', 'google', 'apple'],

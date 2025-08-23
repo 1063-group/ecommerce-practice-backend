@@ -127,7 +127,7 @@ const register = async (req, res) => {
     // 5. Clean and prepare user data
     const userData = {
       email: email ? email.toLowerCase().trim() : undefined,
-      phone: phone ? phone.replace(/\D/g, '') : undefined,
+      phone: phone ? phone.replace(/\D/g, '') : null,
       password: hashedPassword,
       firstName: firstName.trim(),
       lastName: lastName ? lastName.trim() : undefined,
@@ -169,13 +169,13 @@ const register = async (req, res) => {
     console.error("❌ Registration error:", error);
 
     // MongoDB duplicate key error handling
-    if (error.code === 11000) {
-      const duplicateField = Object.keys(error.keyValue)[0];
-      return res.status(409).json({ 
-        message: `User with this ${duplicateField} already exists`,
-        field: duplicateField
-      });
-    }
+    // if (error.code === 11000) {
+    //   const duplicateField = Object.keys(error.keyValue)[0];
+    //   return res.status(409).json({ 
+    //     message: `User with this ${duplicateField} already exists`,
+    //     field: duplicateField
+    //   });
+    // }
 
     // MongoDB validation error
     if (error.name === 'ValidationError') {
