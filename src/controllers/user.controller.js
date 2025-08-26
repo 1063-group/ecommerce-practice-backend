@@ -430,6 +430,7 @@ const updatePassword = async (req, res) => {
 // Regular Login function
 const login = async (req, res) => {
   try {
+    console.log(req.body)
     const { email, password, phone } = req.body;
 
     // Email yoki phone orqali user qidirish
@@ -444,7 +445,7 @@ const login = async (req, res) => {
     // Password tekshirish (bcrypt bilan)
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(400).json({ message: "Invalid password" });
+      return res.status(400).json({ message:S });
     }
 
     // Check if account is verified
