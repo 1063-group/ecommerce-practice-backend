@@ -30,8 +30,7 @@ const normalizeEmail = (email) =>
 const normalizePhone = (phone) =>
   phone ? String(phone).replace(/\D/g, "") : undefined;
 
-const generateVerificationCode = () =>
-  Math.floor(100000 + Math.random() * 900000).toString();
+const generateVerificationCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 const sendVerificationCode = async (user, code) => {
   // TODO: haqiqiy email/SMS yuborish integratsiyasi (nodemailer, SMS provider)

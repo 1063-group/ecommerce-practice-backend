@@ -1,72 +1,69 @@
-// imports
+// .env ni ENG BOSHIDA yuklang (va yo'lni aniq ko'rsating)
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
 const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
-const dotenv = require("dotenv");
 const { dbConnection } = require("./config/db");
 const userRouter = require("./routes/user.routes");
 
-// config
-dotenv.config();
-
-// settings
 const app = express();
+const PORT = process.env.PORT || 8000;
 
-// Connection to Database
-dbConnection()
+// Tez diagnostika (istasaiz keyin olib tashlang)
+console.log("[DEBUG] cwd=", process.cwd());
+console.log("[DEBUG] __dirname=", __dirname);
+console.log("[DEBUG] has MONGODB_CNN?", !!process.env.MONGODB_CNN);
 
-// Enhanced CORS for production
+// CORS
 const corsOptions = {
   origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'https://one063development.onrender.com',
-    'https://ecommerce-client-1063.onrender.com'
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://one063development.onrender.com",
+    "https://ecommerce-client-1063.onrender.com",
   ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 };
 
 // middlewares
 app.use(morgan("dev"));
-app.use(cors(corsOptions)); // Enhanced CORS
+app.use(cors(corsOptions));
 app.use(express.json());
 
-// Health check route
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+// Health
+app.get("/health", (req, res) => {
+  res.json({
+    status: "OK",
     timestamp: new Date().toISOString(),
-    port: process.env.PORT 
+    port: process.env.PORT,
+    env: process.env.NODE_ENV,
   });
 });
 
 // routes
 app.use("/api/v1/auth", userRouter);
 
-// Error handling middleware
+// error handler
 app.use((err, req, res, next) => {
-  console.error('Server Error:', err);
-  res.status(500).json({ 
-    message: 'Server error',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  console.error("Server Error:", err);
+  res.status(500).json({
+    message: "Server error",
+    error: process.env.NODE_ENV === "development" ? err.message : "Internal server error",
   });
 });
 
-// 404 handler
-// app.use('*', (req, res) => {
-//   res.status(404).json({ 
-//     message: 'Route not found',
-//     path: req.originalUrl
-//   });
-// });
+// === MUHIM: Serverni DB dan keyin ishga tushiring ===
+(async () => {
+  await dbConnection(); // 1) avval DB
 
-// starting the server
-const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => {
+  app.listen(PORT, () => {
     console.log(`🚀 Server on port ${PORT}`);
     console.log(`📡 CORS enabled for production and development`);
+  });
+})().catch((e) => {
+  console.error("❌ Fatal startup error:", e);
+  process.exit(1);
 });
-
-// ecommerce - электронный коммерция - интернет магазин
-// CRUD - create, read, update, delete
