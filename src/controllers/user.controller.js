@@ -1,190 +1,159 @@
+// controllers/auth.controller.js
+const Users = require("../models/user.model");
+const bcrypt = require("bcrypt");
 
-const userSchema = require("../models/user.model");
-const crypto = require('crypto');
-const bcrypt = require('bcrypt');
-
-// Email validation regex
+// ---------- Helpers ----------
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// ❌ ESKI NOTO'G'RI REGEX (o'chirish kerak):
-// const phoneRegex = /^(\+998)?[0-9]{9}$/;
-
-// ✅ YANGI TO'G'RI PHONE VALIDATION FUNCTION:
 const validatePhoneNumber = (phone) => {
   if (!phone) return { isValid: true, error: null };
-  
-  const cleanPhone = phone.replace(/\D/g, '');
-  console.log(`🔍 Backend validating: "${phone}" -> "${cleanPhone}" (${cleanPhone.length} digits)`);
-  
-  // Check valid Uzbekistan phone formats
-  const isValid = (
-    (cleanPhone.length === 12 && cleanPhone.startsWith('998')) || // 998991234567
-    (cleanPhone.length === 9) // 991234567
-  );
-  
+
+  const clean = phone.replace(/\D/g, '');
+  const isValid =
+    (clean.length === 12 && clean.startsWith('998')) || // 998991234567
+    (clean.length === 9);                                // 991234567
+
   if (!isValid) {
     let error;
-    if (cleanPhone.length < 9) {
-      error = "Phone number is too short";
-    } else if (cleanPhone.length > 12) {
-      error = "Phone number is too long";
-    } else if (cleanPhone.length === 12 && !cleanPhone.startsWith('998')) {
-      error = "Phone must start with +998";
-    } else if (cleanPhone.length === 10 || cleanPhone.length === 11) {
-      error = "Invalid phone format. Use +998XXXXXXXXX or XXXXXXXXX";
-    } else {
-      error = "Enter valid Uzbekistan phone number";
-    }
+    if (clean.length < 9) error = "Phone number is too short";
+    else if (clean.length > 12) error = "Phone number is too long";
+    else if (clean.length === 12 && !clean.startsWith('998')) error = "Phone must start with +998";
+    else if (clean.length === 10 || clean.length === 11) error = "Invalid phone format. Use +998XXXXXXXXX or XXXXXXXXX";
+    else error = "Enter valid Uzbekistan phone number";
     return { isValid: false, error };
   }
-  
   return { isValid: true, error: null };
 };
 
-// Generate 6-digit verification code
-const generateVerificationCode = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
+const normalizeEmail = (email) =>
+  email ? String(email).toLowerCase().trim() : undefined;
+const normalizePhone = (phone) =>
+  phone ? String(phone).replace(/\D/g, "") : undefined;
 
-// Send verification code
+const generateVerificationCode = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
+
 const sendVerificationCode = async (user, code) => {
-  if (user.authMethod === 'email') {
-    console.log(`📧 Sending verification code ${code} to email: ${user.email}`);
-  } else if (user.authMethod === 'phone') {
-    console.log(`📱 Sending verification code ${code} to phone: ${user.phone}`);
+  // TODO: haqiqiy email/SMS yuborish integratsiyasi (nodemailer, SMS provider)
+  if (user.authMethod === "email") {
+    console.log(`📧 Send ${code} to email: ${user.email}`);
+  } else if (user.authMethod === "phone") {
+    console.log(`📱 Send ${code} to phone: ${user.phone}`);
+  } else {
+    console.log(`ℹ️ Code ${code} generated for user ${user._id}`);
   }
 };
 
-// ✅ FIXED REGISTER FUNCTION
+// ---------- REGISTER ----------
+/**
+ * POST /api/auth/register
+ * Body:
+ * {
+ *   email?: string,
+ *   phone?: string,
+ *   password: string,
+ *   firstName: string,
+ *   lastName?: string,
+ *   authMethod?: 'email'|'phone'|'telegram'|'google'|'apple'
+ * }
+ */
 const register = async (req, res) => {
   try {
-    const { 
-      email, 
-      phone, 
-      password, 
-      firstName, 
-      lastName, 
-      authMethod = 'email' 
-    } = req.body;
+    const {
+      email,
+      phone,
+      password,
+      firstName,
+      lastName,
+      authMethod = "email",
+    } = req.body || {};
 
-    console.log('📝 Registration request:', { email, phone, firstName, authMethod });
-
-    // 1. Input validation
+    // 1) Validate
     const errors = {};
 
-    // Email yoki phone kamida bittasi bo'lishi kerak
     if (!email && !phone) {
       errors.auth = "Email or phone number is required";
     }
 
-    // Email validation
     if (email) {
-      if (!emailRegex.test(email)) {
-        errors.email = "Invalid email format";
-      }
+      const emailNorm = normalizeEmail(email);
+      if (!emailRegex.test(emailNorm)) errors.email = "Invalid email format";
     }
 
-    // ✅ YANGI PHONE VALIDATION
     if (phone) {
-      const phoneValidation = validatePhoneNumber(phone);
-      if (!phoneValidation.isValid) {
-        errors.phone = phoneValidation.error;
-      }
+      const { isValid, error } = validatePhoneNumber(phone);
+      if (!isValid) errors.phone = error;
     }
 
-    // Password validation
-    if (!password) {
-      errors.password = "Password is required";
+    if (!password || String(password).trim().length < 8) {
+      errors.password = "Password must be at least 8 characters long";
     } else {
-      if (password.length < 8) {
-        errors.password = "Password must be at least 8 characters long";
-      }
-      // Password strength check
-      const hasUpper = /[A-Z]/.test(password);
-      const hasLower = /[a-z]/.test(password);
-      const hasNumber = /\d/.test(password);
-      
+      const pw = String(password);
+      const hasUpper = /[A-Z]/.test(pw);
+      const hasLower = /[a-z]/.test(pw);
+      const hasNumber = /\d/.test(pw);
       if (!hasUpper || !hasLower || !hasNumber) {
         errors.password = "Password must contain uppercase, lowercase, and number";
       }
     }
 
-    // firstName validation
-    if (!firstName || firstName.trim().length < 2) {
+    if (!firstName || String(firstName).trim().length < 2) {
       errors.firstName = "First name must be at least 2 characters long";
     }
 
-    // lastName validation (optional)
-    if (lastName && lastName.trim().length < 2) {
-      errors.lastName = "Last name must be at least 2 characters long";
-    }
-
-    // Auth method validation
-    const validAuthMethods = ['email', 'phone', 'telegram', 'google', 'apple'];
+    const validAuthMethods = ["email", "phone", "telegram", "google", "apple"];
     if (!validAuthMethods.includes(authMethod)) {
       errors.authMethod = "Invalid authentication method";
     }
 
-    // Agar validation error'lar bo'lsa, qaytarish
     if (Object.keys(errors).length > 0) {
-      console.log('❌ Validation errors:', errors);
-      return res.status(400).json({
-        message: "Validation failed",
-        errors: errors
-      });
+      return res.status(400).json({ message: "Validation failed", errors });
     }
 
-    // 2. Check if user already exists
-    const existingUser = await userSchema.findOne({
+    // 2) Normalization
+    const emailNorm = normalizeEmail(email);
+    const phoneNorm = normalizePhone(phone);
+
+    // 3) Conflict check
+    const conflictUser = await Users.findOne({
       $or: [
-        ...(email ? [{ email: email.toLowerCase() }] : []),
-        ...(phone ? [{ phone: phone.replace(/\D/g, '') }] : [])
-      ]
+        ...(emailNorm ? [{ email: emailNorm }] : []),
+        ...(phoneNorm ? [{ phone: phoneNorm }] : []),
+      ],
     });
 
-    if (existingUser) {
-      const conflictField = existingUser.email === email?.toLowerCase() ? 'email' : 'phone';
-      return res.status(409).json({ 
-        message: `User with this ${conflictField} already exists`,
-        field: conflictField
+    if (conflictUser) {
+      const field =
+        emailNorm && conflictUser.email === emailNorm ? "email" : "phone";
+      return res.status(409).json({
+        message: `User with this ${field} already exists`,
+        field,
       });
     }
 
-    // 3. Hash password
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // 4. Generate verification code
+    // 4) Prepare user (hashing model pre('save') da bo'ladi)
     const verificationCode = generateVerificationCode();
-
-    // 5. Clean and prepare user data
     const userData = {
-      email: email ? email.toLowerCase().trim() : undefined,
-      phone: phone ? phone.replace(/\D/g, '') : undefined, // ✅ FIXED: undefined instead of null
-      password: hashedPassword,
-      firstName: firstName.trim(),
-      lastName: lastName ? lastName.trim() : undefined,
-      authMethod: authMethod,
+      email: emailNorm,
+      phone: phoneNorm,
+      password: String(password), // plain -> model hook hash qiladi
+      firstName: String(firstName).trim(),
+      lastName: lastName ? String(lastName).trim() : undefined,
+      authMethod,
       isVerified: false,
-      verificationCode: verificationCode,
+      verificationCode,
       verificationCodeCreatedAt: Date.now(),
-      createdAt: new Date()
+      createdAt: new Date(),
     };
 
-    console.log('✅ Creating user with data:', {
-      ...userData,
-      password: '[HIDDEN]',
-      verificationCode: '[HIDDEN]'
-    });
+    // 5) Create
+    const newUser = await Users.create(userData);
 
-    // 6. Create user
-    const newUser = await userSchema.create(userData);
-
-    // 7. Send verification code
+    // 6) Send code
     await sendVerificationCode(newUser, verificationCode);
 
-    // 8. Prepare response
-    const userResponse = {
+    // 7) Response
+    const safeUser = {
       id: newUser._id,
       email: newUser.email,
       phone: newUser.phone,
@@ -192,120 +161,94 @@ const register = async (req, res) => {
       lastName: newUser.lastName,
       authMethod: newUser.authMethod,
       isVerified: newUser.isVerified,
-      createdAt: newUser.createdAt
+      createdAt: newUser.createdAt,
     };
 
-    // 9. Success response
-    res.status(201).json({
-      message: "User registered successfully. Please check your email/phone for verification code.",
-      user: userResponse,
-      nextStep: "verify_account"
+    return res.status(201).json({
+      message:
+        "User registered successfully. Please check your email/phone for verification code.",
+      user: safeUser,
+      nextStep: "verify_account",
     });
-
-    console.log(`✅ User registered with verification: ${newUser._id} (${authMethod})`);
-
   } catch (error) {
     console.error("❌ Registration error:", error);
 
-    // MongoDB duplicate key error handling
-    if (error.code === 11000) {
+    if (error?.code === 11000 && error?.keyValue) {
       const duplicateField = Object.keys(error.keyValue)[0];
-      return res.status(409).json({ 
+      return res.status(409).json({
         message: `User with this ${duplicateField} already exists`,
-        field: duplicateField
+        field: duplicateField,
       });
     }
 
-    // MongoDB validation error
-    if (error.name === 'ValidationError') {
+    if (error?.name === "ValidationError") {
       const validationErrors = {};
-      Object.keys(error.errors).forEach(key => {
-        validationErrors[key] = error.errors[key].message;
-      });
-      
-      return res.status(400).json({
-        message: "Validation failed",
-        errors: validationErrors
-      });
+      for (const k of Object.keys(error.errors)) {
+        validationErrors[k] = error.errors[k].message;
+      }
+      return res
+        .status(400)
+        .json({ message: "Validation failed", errors: validationErrors });
     }
 
-    // Generic server error
-    res.status(500).json({ 
+    return res.status(500).json({
       message: "Registration failed",
-      error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
     });
   }
 };
 
-// ✅ TEST CASES FOR BACKEND
-/*
-console.log('🧪 Testing backend phone validation:');
-console.log(validatePhoneNumber('991234567'));      // ✅ { isValid: true }
-console.log(validatePhoneNumber('+998991234567'));  // ✅ { isValid: true }
-console.log(validatePhoneNumber('998991234567'));   // ✅ { isValid: true }
-console.log(validatePhoneNumber('12345'));          // ❌ { isValid: false, error: "Phone number is too short" }
-console.log(validatePhoneNumber('+997991234567'));  // ❌ { isValid: false, error: "Phone must start with +998" }
-*/
-
-// Verify Account function
+// ---------- VERIFY ACCOUNT ----------
+/**
+ * POST /api/auth/verify
+ * Body: { userId: string, verificationCode: string }
+ */
 const verifyAccount = async (req, res) => {
   try {
-    const { userId, verificationCode, authMethod } = req.body;
+    const { userId, verificationCode } = req.body || {};
 
-    // Validation
     if (!userId || !verificationCode) {
-      return res.status(400).json({
-        message: "User ID and verification code are required",
-      });
+      return res
+        .status(400)
+        .json({ message: "User ID and verification code are required" });
+    }
+    if (!/^\d{6}$/.test(String(verificationCode))) {
+      return res
+        .status(400)
+        .json({ message: "Verification code must be 6 digits" });
     }
 
-    if (verificationCode.length !== 6 || !/^\d{6}$/.test(verificationCode)) {
-      return res.status(400).json({
-        message: "Verification code must be 6 digits",
-      });
-    }
+    const user = await Users.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Find user
-    const user = await userSchema.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
-    }
-
-    // Check if already verified
     if (user.isVerified) {
-      return res.status(400).json({
-        message: "Account is already verified",
-      });
+      return res.status(400).json({ message: "Account is already verified" });
     }
 
-    // Check verification code
-    if (!user.verificationCode || user.verificationCode !== verificationCode) {
-      return res.status(400).json({
-        message: "Invalid verification code",
-      });
+    if (!user.verificationCode || user.verificationCode !== String(verificationCode)) {
+      return res.status(400).json({ message: "Invalid verification code" });
     }
 
-    // Check expiration (5 minutes)
-    const codeAge = Date.now() - user.verificationCodeCreatedAt;
-    if (codeAge > 5 * 60 * 1000) {
-      return res.status(400).json({
-        message: "Verification code has expired. Please request a new one.",
-      });
+    // 5 minutes expiry
+    const age = Date.now() - (user.verificationCodeCreatedAt || 0);
+    if (age > 5 * 60 * 1000) {
+      return res
+        .status(400)
+        .json({ message: "Verification code has expired. Please request a new one." });
     }
 
-    // Verify the account
     user.isVerified = true;
     user.verificationCode = undefined;
     user.verificationCodeCreatedAt = undefined;
     await user.save();
 
-    // Generate JWT token (real app'da JWT library ishlatish kerak)
-    const token = `verified_token_${user._id}_${Date.now()}`;
+    // No JWT — istasangiz shunchaki session token qaytarishingiz mumkin
+    const sessionToken = `verified_token_${user._id}_${Date.now()}`;
 
-    // Success response
-    res.status(200).json({
+    return res.status(200).json({
       message: "Account verified successfully",
       user: {
         id: user._id,
@@ -316,13 +259,11 @@ const verifyAccount = async (req, res) => {
         authMethod: user.authMethod,
         isVerified: user.isVerified,
       },
-      token: token,
+      token: sessionToken, // xohlasangiz olib tashlang
     });
-
-    console.log(`✅ Account verified successfully: ${user._id}`);
   } catch (error) {
     console.error("❌ Account verification error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Verification failed",
       error:
         process.env.NODE_ENV === "development"
@@ -332,62 +273,47 @@ const verifyAccount = async (req, res) => {
   }
 };
 
-// Resend Verification Code function
+// ---------- RESEND CODE ----------
+/**
+ * POST /api/auth/resend-code
+ * Body: { userId: string, authMethod?: 'email'|'phone' }
+ */
 const resendVerificationCode = async (req, res) => {
   try {
-    const { userId, authMethod } = req.body;
+    const { userId, authMethod } = req.body || {};
+    if (!userId) return res.status(400).json({ message: "User ID is required" });
 
-    if (!userId) {
-      return res.status(400).json({
-        message: "User ID is required",
-      });
-    }
+    const user = await Users.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Find user
-    const user = await userSchema.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
-    }
-
-    // Check if already verified
     if (user.isVerified) {
-      return res.status(400).json({
-        message: "Account is already verified",
-      });
+      return res.status(400).json({ message: "Account is already verified" });
     }
 
-    // Check rate limiting (prevent spam)
-    const lastCodeTime = user.verificationCodeCreatedAt;
-    if (lastCodeTime && Date.now() - lastCodeTime < 60 * 1000) {
-      return res.status(429).json({
-        message: "Please wait 60 seconds before requesting a new code",
-      });
+    // rate limit: 60s
+    const last = user.verificationCodeCreatedAt || 0;
+    if (Date.now() - last < 60 * 1000) {
+      return res
+        .status(429)
+        .json({ message: "Please wait 60 seconds before requesting a new code" });
     }
 
-    // Generate new verification code
-    const newVerificationCode = generateVerificationCode();
-
-    // Update user with new code
-    user.verificationCode = newVerificationCode;
+    const code = generateVerificationCode();
+    user.verificationCode = code;
     user.verificationCodeCreatedAt = Date.now();
     await user.save();
 
-    // Send verification code
-    await sendVerificationCode(user, newVerificationCode);
+    await sendVerificationCode(user, code);
 
-    res.status(200).json({
+    return res.status(200).json({
       message: `Verification code sent to your ${
-        authMethod === "phone" ? "phone number" : "email address"
+        (authMethod || user.authMethod) === "phone" ? "phone number" : "email address"
       }`,
-      canResendAfter: 60, // seconds
+      canResendAfter: 60,
     });
-
-    console.log(`📤 Verification code resent to user: ${user._id}`);
   } catch (error) {
     console.error("❌ Resend verification error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Failed to resend verification code",
       error:
         process.env.NODE_ENV === "development"
@@ -397,67 +323,87 @@ const resendVerificationCode = async (req, res) => {
   }
 };
 
-// Update Password function
+// ---------- UPDATE PASSWORD ----------
+/**
+ * POST /api/auth/update-password
+ * Body: { phone: string, password: string }
+ */
 const updatePassword = async (req, res) => {
   try {
-    const { phone, password } = req.body;
+    const { phone, password } = req.body || {};
 
-    const user = (await userSchema.findOne({ phone })) || null;
-
-    if (!password || password.trim().length < 8) {
+    if (!phone) return res.status(400).json({ message: "Phone is required" });
+    if (!password || String(password).trim().length < 8) {
       return res
         .status(400)
         .json({ message: "Password must be at least 8 characters long" });
     }
 
-    if (user) {
-      // Hash the new password
-      const saltRounds = 12;
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const phoneNorm = normalizePhone(phone);
+    const user = await Users.findOne({ phone: phoneNorm });
 
-      user.password = hashedPassword;
-      await user.save();
-      return res.status(200).json({ message: "Password updated successfully" });
-    } else {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // ❗️Hash controllerda emas — model hook qiladi
+    user.password = String(password);
+    await user.save();
+
+    return res.status(200).json({ message: "Password updated successfully" });
   } catch (e) {
-    console.log("SERVER ERROR: | updatePassword", e);
-    res.status(500).json({ error: "Server error | Update Password" });
+    console.error("SERVER ERROR: | updatePassword", e);
+    return res.status(500).json({ error: "Server error | Update Password" });
   }
 };
 
-// Regular Login function
+// ---------- LOGIN (no JWT) ----------
+/**
+ * POST /api/auth/login
+ * Body: { email?: string, phone?: string, password: string }
+ */
 const login = async (req, res) => {
   try {
-    const { email, password, phone } = req.body;
+    const { email, phone, password } = req.body || {};
 
-    // Email yoki phone orqali user qidirish
-    const user = await userSchema.findOne({
-      $or: [{ email: email }, { phone: phone }],
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    if (!email && !phone) {
+      return res.status(400).json({ message: "Email or phone is required" });
+    }
+    if (!password || String(password).trim().length < 1) {
+      return res.status(400).json({ message: "Password is required" });
     }
 
-    // Password tekshirish (bcrypt bilan)
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const emailNorm = normalizeEmail(email);
+    const phoneNorm = normalizePhone(phone);
+
+    const user = await Users.findOne({
+      $or: [
+        ...(emailNorm ? [{ email: emailNorm }] : []),
+        ...(phoneNorm ? [{ phone: phoneNorm }] : []),
+      ],
+    }).select("+password"); // agar schema’da select:false bo‘lsa — shart
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const isPasswordValid = await bcrypt.compare(
+      String(password),
+      String(user.password)
+    );
+
     if (!isPasswordValid) {
       return res.status(400).json({ message: "Invalid password" });
     }
 
-    // Check if account is verified
-    if (!user.isVerified) {
-      return res.status(403).json({
-        message: "Please verify your account first",
-        requiresVerification: true,
-        userId: user._id,
-      });
-    }
+    // if (!user.isVerified) {
+    //   return res.status(403).json({
+    //     message: "Please verify your account first",
+    //     requiresVerification: true,
+    //     userId: user._id,
+    //   });
+    // }
 
-    // Success response
-    res.status(200).json({
+    // JWTsiz shunchaki opaque session token (ixtiyoriy)
+    const token = `token_${user._id}_${Date.now()}`;
+
+    return res.status(200).json({
       message: "Login successful",
       user: {
         id: user._id,
@@ -467,98 +413,81 @@ const login = async (req, res) => {
         phone: user.phone,
         authMethod: user.authMethod || "email",
         isVerified: user.isVerified,
+        username: user.username,
+        photoUrl: user.photoUrl,
+        telegramId: user.telegramId,
+        createdAt: user.createdAt,
       },
-      token: `token_${user._id}_${Date.now()}`,
+      token, // xohlasangiz olib tashlang
     });
   } catch (error) {
-    console.log("SERVER ERROR: | login", error);
-    res.status(500).json({ error: "Server error | Login" });
+    console.error("SERVER ERROR | login:", error);
+    return res.status(500).json({
+      message: "Server error | Login",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
+    });
   }
 };
 
-// Telegram login function
+// ---------- TELEGRAM LOGIN (no JWT) ----------
+/**
+ * POST /api/auth/telegram
+ * Body: { telegramData: {...from Telegram WebApp/User} }
+ * Eslatma: bu sample hash verifikatsiyasiz — prod’da Telegram login hash tekshiruvini qo‘shing.
+ */
 const telegramLogin = async (req, res) => {
-  // Set response headers
   res.setHeader("Content-Type", "application/json");
-
   try {
-    const { telegramData } = req.body;
-
+    const { telegramData } = req.body || {};
     if (!telegramData) {
       return res.status(400).json({ message: "Telegram data is required" });
     }
 
-    console.log("✅ Telegram login attempt:", telegramData);
-
-    // Telegram ma'lumotlarini verificatsiya qilish
-    const { hash, ...userData } = telegramData;
-
-    // Bot token bilan hash tekshirish (security uchun)
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-
-    if (!botToken) {
-      console.log("TELEGRAM_BOT_TOKEN is not set in environment variables");
-      return res.status(500).json({ message: "Server configuration error" });
-    }
-
-    // User'ni database'da qidirish yoki yaratish
-    let user = await userSchema.findOne({
-      telegramId: userData.id.toString(),
-    });
+    const { hash, ...tg } = telegramData; // TODO: prod’da hashni tekshirish
+    let user = await Users.findOne({ telegramId: String(tg.id) });
 
     if (!user) {
-      // Yangi user yaratish
+      const newUserData = {
+        telegramId: String(tg.id),
+        firstName: tg.first_name || "User",
+        lastName: tg.last_name || "",
+        username: tg.username || undefined,
+        photoUrl:
+          tg.photo_url && String(tg.photo_url).trim() !== "" ? tg.photo_url : "",
+        phone: undefined,
+        email: undefined,
+        authMethod: "telegram",
+        isVerified: true, // Telegram foydalanuvchilarni auto-verified deb qabul qilamiz
+      };
+
       try {
-        // Empty string'lar o'rniga undefined yoki null ishlatamiz
-        const newUserData = {
-          telegramId: userData.id.toString(),
-          firstName: userData.first_name || "User",
-          lastName: userData.last_name || "",
-          username: userData.username || undefined,
-          photoUrl:
-            userData.photo_url && userData.photo_url.trim() !== ""
-              ? userData.photo_url
-              : "",
-          phone: undefined,
-          email: undefined,
-          authMethod: "telegram",
-          isVerified: true, // Telegram users are auto-verified
-        };
-
-        user = await userSchema.create(newUserData);
-
-        console.log("New Telegram user created:", user._id);
+        user = await Users.create(newUserData);
       } catch (createError) {
-        console.log("Error creating Telegram user:", createError);
-
-        // Agar duplicate key error bo'lsa, boshqa field'da conflict bor
-        if (createError.code === 11000) {
+        if (createError?.code === 11000 && createError?.keyValue) {
           const duplicateField = Object.keys(createError.keyValue)[0];
           return res.status(400).json({
             message: `User with this ${duplicateField} already exists`,
             field: duplicateField,
           });
         }
-
-        return res.status(500).json({ message: "Error creating user account" });
+        throw createError;
       }
     } else {
-      // Mavjud user ma'lumotlarini yangilash
-      user.firstName = userData.first_name || user.firstName;
-      user.lastName = userData.last_name || user.lastName;
-      user.photoUrl = userData.photo_url || user.photoUrl;
-
-      // Username faqat agar yangi qiymat bo'lsa update qilamiz
-      if (userData.username && userData.username !== user.username) {
-        user.username = userData.username;
+      // mavjud userni yangilash
+      user.firstName = tg.first_name || user.firstName;
+      user.lastName = tg.last_name || user.lastName;
+      user.photoUrl = tg.photo_url || user.photoUrl;
+      if (tg.username && tg.username !== user.username) {
+        user.username = tg.username;
       }
-
       await user.save();
-      console.log("Existing Telegram user updated:", user._id);
     }
 
-    // Success response
-    console.log("✅ Telegram login successful for user:", user._id);
+    const token = `telegram_token_${user._id}_${Date.now()}`; // JWT emas
+
     return res.status(200).json({
       message: "Telegram login successful",
       user: {
@@ -571,13 +500,12 @@ const telegramLogin = async (req, res) => {
         telegramId: user.telegramId,
         isVerified: user.isVerified,
       },
-      token: `telegram_token_${user._id}_${Date.now()}`,
+      token, // xohlasangiz olib tashlang
     });
   } catch (error) {
     console.error("❌ Telegram login error:", error);
 
-    // MongoDB duplicate key error
-    if (error.code === 11000) {
+    if (error?.code === 11000 && error?.keyValue) {
       const duplicateField = Object.keys(error.keyValue)[0];
       return res.status(400).json({
         message: `User with this ${duplicateField} already exists`,
