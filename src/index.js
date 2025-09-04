@@ -7,6 +7,8 @@ const morgan = require("morgan");
 const cors = require("cors");
 const { dbConnection } = require("./config/db");
 const userRouter = require("./routes/user.routes");
+const productRouter = require("./routes/product.routes");
+const categoryRouter = require("./routes/category.routes");
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -45,6 +47,9 @@ app.get("/health", (req, res) => {
 
 // routes
 app.use("/api/v1/auth", userRouter);
+// app.use("/api/v1/products", productRouter);
+app.use("/api/v1/categories", categoryRouter);
+
 
 // error handler
 app.use((err, req, res, next) => {
