@@ -9,6 +9,7 @@ const { dbConnection } = require("./config/db");
 const userRouter = require("./routes/user.routes");
 const productRouter = require("./routes/product.routes");
 const categoryRouter = require("./routes/category.routes");
+const brandRoutes = require('./routes/brand.routes');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -49,6 +50,7 @@ app.get("/health", (req, res) => {
 app.use("/api/v1/auth", userRouter);
 // app.use("/api/v1/products", productRouter);
 app.use("/api/v1/categories", categoryRouter);
+app.use('/api/brands', brandRoutes);
 
 
 // error handler
